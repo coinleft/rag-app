@@ -14,11 +14,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
 import os
-from http import HTTPStatus
 import chromadb 
 import uuid
 import shutil # 文件操作模块，为了避免既往数据的干扰，在每次启动时清空 ChromaDB 存储目录中的文件
-import dashscope
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -53,7 +52,10 @@ def load_document(file_path):
     print(f"不支持的文档类型: '{ext}'")
     return ""
 
-def load_embedding_model(model_path='rag_app/bge-small-zh-v1.5'):
+# file_path = 'data/test.pdf'
+# load_document(file_path)
+
+def load_embedding_model(model_path='./bge-small-zh-v1.5'):
     print("加载Embedding模型中")
     embedding_model = SentenceTransformer(os.path.abspath(model_path))
     print(f"bge-small-zh-v1.5模型最大输入长度: {embedding_model.max_seq_length}")
@@ -109,8 +111,6 @@ def retrieval_process(query, collection, embedding_model=None, top_k=6):
     return retrieved_chunks
 
 def generate_process(query, chunks):
-    llm_model = QWEN_MODEL
-    dashscope.api_key = QWEN_API_KEY
 
     context = ""
     for i, chunk in enumerate(chunks):
@@ -121,36 +121,23 @@ def generate_process(query, chunks):
 
     messages = [{'role': 'user', 'content': prompt}]
 
-    try:
-        responses = dashscope.Generation.call(
-            model = llm_model,
-            messages=messages,
-            result_format='message', 
-            stream=True,            
-            incremental_output=True   
-        )
-        generated_response = ""
-        print("生成过程开始:")
-        for response in responses:
-            if response.status_code == HTTPStatus.OK:
-                content = response.output.choices[0]['message']['content']
-                generated_response += content
-                print(content, end='')
-            else:
-                print(f"请求失败: {response.status_code} - {response.message}")
-                return None
-        print("\n生成过程完成.")
-        print("********************************************************")
-        return generated_response
-    except Exception as e:
-        print(f"大模型生成过程中发生错误: {e}")
-        return None
+    from langchain_openai import ChatOpenAI
+    model = ChatOpenAI(
+        api_key=os.getenv("DASHSCOPE_API_KEY"),
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        model="qwen-max",  # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
+        # other params...
+    )
+
+    response = model.invoke(messages)
+    print(response)
+
 
 def main():
     print("RAG过程开始.")
 
     # 为了避免既往数据的干扰，在每次启动时清空 ChromaDB 存储目录中的文件
-    chroma_db_path = os.path.abspath("rag_app/chroma_db")
+    chroma_db_path = os.path.abspath("./chroma_db")
     if os.path.exists(chroma_db_path):
         shutil.rmtree(chroma_db_path)
 
@@ -159,9 +146,11 @@ def main():
     collection = client.get_or_create_collection(name="documents") 
     embedding_model = load_embedding_model()
 
-    indexing_process('rag_app/data', embedding_model, collection)
+    indexing_process('./data', embedding_model, collection)
     query = "下面报告中涉及了哪几个行业的案例以及总结各自面临的挑战？"
     retrieval_chunks = retrieval_process(query, collection, embedding_model)
+    print(retrieval_chunks[0])
+
     generate_process(query, retrieval_chunks)
     print("RAG过程结束.")
 
