@@ -61,7 +61,7 @@ def load_embedding_model(model_path='./bge-small-zh-v1.5'):
     print(f"bge-small-zh-v1.5模型最大输入长度: {embedding_model.max_seq_length}")
     return embedding_model
 
-def indexing_process(folder_path, embedding_model, collection):
+def embedding_process(folder_path, embedding_model, collection):
     all_chunks = []
     all_ids = []
 
@@ -89,7 +89,7 @@ def indexing_process(folder_path, embedding_model, collection):
     print("索引过程完成.")
     print("********************************************************")
 
-def retrieval_process(query, collection, embedding_model=None, top_k=6):
+def retrieval_process(query, collection, embedding_model, top_k=6):
     query_embedding = embedding_model.encode(query, normalize_embeddings=True).tolist()
 
     # 使用向量数据库检索与query最相似的top_k个文本块
@@ -143,10 +143,10 @@ def main():
 
     # 创建ChromaDB本地存储实例和collection
     client = chromadb.PersistentClient(chroma_db_path)
-    collection = client.get_or_create_collection(name="documents") 
+    collection = client.get_or_create_collection(name="documents", metadata={"hnsw:space": "cosine"} ) 
     embedding_model = load_embedding_model()
 
-    indexing_process('./data', embedding_model, collection)
+    embedding_process('./data', embedding_model, collection)
     query = "下面报告中涉及了哪几个行业的案例以及总结各自面临的挑战？"
     retrieval_chunks = retrieval_process(query, collection, embedding_model)
     print(retrieval_chunks[0])
