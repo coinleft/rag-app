@@ -12,6 +12,7 @@ from langchain_community.document_loaders import (
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
+from langchain_openai import ChatOpenAI
 
 import os
 import chromadb 
@@ -64,6 +65,7 @@ def load_embedding_model(model_path='./bge-small-zh-v1.5'):
 def embedding_process(folder_path, embedding_model, collection):
     all_chunks = []
     all_ids = []
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=128)
 
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
@@ -73,7 +75,6 @@ def embedding_process(folder_path, embedding_model, collection):
             if document_text:
                 print(f"文档 {filename} 的总字符数: {len(document_text)}")
 
-                text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=128)
                 chunks = text_splitter.split_text(document_text)
                 print(f"文档 {filename} 分割的文本Chunk数量: {len(chunks)}")
 
@@ -120,37 +121,47 @@ def generate_process(query, chunks):
 
     messages = [{'role': 'user', 'content': prompt}]
 
-    from langchain_openai import ChatOpenAI
+
     model = ChatOpenAI(
         api_key=os.getenv("DASHSCOPE_API_KEY"),
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         model="qwen-max",  # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
-        # other params...
     )
 
     response = model.invoke(messages)
     print(response)
 
 
-def main():
+def main(clear_db: bool = False):
     print("RAG过程开始.")
 
     # 为了避免既往数据的干扰，在每次启动时清空 ChromaDB 存储目录中的文件
     chroma_db_path = os.path.abspath("./chroma_db")
-    if os.path.exists(chroma_db_path):
+    if clear_db and os.path.exists(chroma_db_path):
         shutil.rmtree(chroma_db_path)
 
     # 创建ChromaDB本地存储实例和collection
     client = chromadb.PersistentClient(chroma_db_path)
-    collection = client.get_or_create_collection(name="documents", metadata={"hnsw:space": "cosine"} ) 
-    embedding_model = load_embedding_model()
+    collection = client.get_or_create_collection(
+        name="documents",
+        metadata={"hnsw:space": "cosine"} 
+    ) 
 
-    embedding_process('./data', embedding_model, collection)
+    embedding_model = load_embedding_model()
+    # 检查是否需要重新索引
+    if collection.count() == 0:
+        print("开始索引文档")
+        embedding_process('./data', embedding_model, collection)
+    else: 
+        print(f"使用现有索引，已有 {collection.count()} 个文档块")
+
     query = "下面报告中涉及了哪几个行业的案例以及总结各自面临的挑战？"
     retrieval_chunks = retrieval_process(query, collection, embedding_model)
-    print(retrieval_chunks[0])
+    # print(retrieval_chunks[0])
 
-    generate_process(query, retrieval_chunks)
+    if retrieval_chunks:
+        generate_process(query, retrieval_chunks)
+    
     print("RAG过程结束.")
 
 if __name__ == "__main__":
