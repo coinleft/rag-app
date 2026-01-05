@@ -51,7 +51,7 @@ def load_document(file_path):
 
     print(f"不支持的文档类型: '{ext}'")
     return ""
-
+    
 # file_path = 'data/test.pdf'
 # load_document(file_path)
 
@@ -81,8 +81,7 @@ def embedding_process(folder_path, embedding_model, collection):
                 # 生成每个文本块对应的唯一ID
                 all_ids.extend([str(uuid.uuid4()) for _ in range(len(chunks))])
 
-    embeddings = [embedding_model.encode(chunk, normalize_embeddings=True).tolist() for chunk in all_chunks]
-
+    embeddings = embedding_model.encode(all_chunks, normalize_embeddings=True).tolist()
     # 将文本块的ID、嵌入向量和原始文本块内容添加到ChromaDB的collection中
     collection.add(ids=all_ids, embeddings=embeddings, documents=all_chunks)
     print("嵌入生成完成，向量数据库存储完成.")
