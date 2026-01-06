@@ -89,7 +89,7 @@ def embedding_process(folder_path, embedding_model, collection):
     print("索引过程完成.")
     print("********************************************************")
 
-def retrieval_process(query, collection, embedding_model, top_k=6):
+def retrieval_process(query, collection, embedding_model, top_k=5):
     query_embedding = embedding_model.encode(query, normalize_embeddings=True).tolist()
 
     # 使用向量数据库检索与query最相似的top_k个文本块
@@ -120,7 +120,6 @@ def generate_process(query, chunks):
     print(f"生成模型的Prompt: {prompt}")
 
     messages = [{'role': 'user', 'content': prompt}]
-
 
     model = ChatOpenAI(
         api_key=os.getenv("DASHSCOPE_API_KEY"),
